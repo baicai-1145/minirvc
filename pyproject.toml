@@ -1,0 +1,22 @@
+[project]
+name = "minirvc"
+version = "0.1.0"
+description = "A minimal RVC rewrite."
+readme = "README.md"
+requires-python = ">=3.10,<3.11"
+dependencies = [
+    "av>=17.0.1",
+    "numpy>=2.2.0",
+    "scipy>=1.15.0",
+    "soxr>=1.1.0",
+    "torch>=2.8.0",
+]
+
+[project.scripts]
+minirvc-preprocess-audio = "minirvc.preprocess.preprocess_audio:main"
+minirvc-extract-f0 = "minirvc.f0.extract_f0:main"
+minirvc-extract-hubert = "minirvc.content.extract_hubert:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
