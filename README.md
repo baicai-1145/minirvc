@@ -188,8 +188,13 @@ uv run minirvc-infer input.wav output.wav --model logs/test/test.pth --index log
 ```text
 --sid                 说话人 ID，默认 0
 --f0-up-key           半音升降调，默认 0
+--protect             F0 模型无声区特征保护，默认 0.33
 --index-rate          检索混合比例，0 到 1，默认 0
 --index-top-k         检索 top-k，默认 8
+--split-pad-seconds   推理分段前后 pad 秒数，默认按设备精度沿用原版
+--split-query-seconds 推理切点搜索窗口秒数，默认按设备精度沿用原版
+--split-center-seconds 推理切点间隔秒数，默认按设备精度沿用原版
+--split-max-seconds   超过该长度启用推理分段，默认按设备精度沿用原版
 --device              例如 cuda:0 或 cpu
 --no-half             禁用半精度推理
 ```

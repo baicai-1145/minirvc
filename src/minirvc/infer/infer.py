@@ -25,8 +25,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--f0-up-key", type=float, default=0.0)
     parser.add_argument("--f0-threshold", type=float, default=0.03)
     parser.add_argument("--noise-scale", type=float, default=0.66666)
+    parser.add_argument("--protect", type=float, default=0.33)
     parser.add_argument("--highpass-hz", type=float, default=48.0)
     parser.add_argument("--max-peak", type=float, default=0.99)
+    parser.add_argument("--split-pad-seconds", type=int, default=None)
+    parser.add_argument("--split-query-seconds", type=int, default=None)
+    parser.add_argument("--split-center-seconds", type=int, default=None)
+    parser.add_argument("--split-max-seconds", type=int, default=None)
     parser.add_argument("--no-half", action="store_true")
     return parser
 
@@ -45,7 +50,11 @@ def main(argv: Iterable[str] | None = None) -> None:
         device=device,
         half=not args.no_half,
     )
-    paths = sorted(path for path in args.input.iterdir() if path.suffix.lower() == ".wav") if args.input.is_dir() else [args.input]
+    paths = (
+        sorted(path for path in args.input.iterdir() if path.suffix.lower() == ".wav")
+        if args.input.is_dir()
+        else [args.input]
+    )
     for path in paths:
         output = args.output / path.name if args.input.is_dir() else args.output
         inferencer.infer_file(
@@ -55,8 +64,13 @@ def main(argv: Iterable[str] | None = None) -> None:
             f0_up_key=args.f0_up_key,
             f0_threshold=args.f0_threshold,
             noise_scale=args.noise_scale,
+            protect=args.protect,
             highpass_hz=args.highpass_hz,
             max_peak=args.max_peak,
+            split_pad_seconds=args.split_pad_seconds,
+            split_query_seconds=args.split_query_seconds,
+            split_center_seconds=args.split_center_seconds,
+            split_max_seconds=args.split_max_seconds,
         )
 
 
