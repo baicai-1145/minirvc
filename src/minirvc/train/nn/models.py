@@ -392,6 +392,25 @@ class _Synthesizer(nn.Module):
             y_hat = self.dec(z_slice, g=g)
         return y_hat, ids_slice, x_mask, y_mask, stats
 
+    def infer(
+        self,
+        phone: torch.Tensor,
+        phone_lengths: torch.Tensor,
+        sid: torch.Tensor,
+        pitch: torch.Tensor | None = None,
+        pitchf: torch.Tensor | None = None,
+        noise_scale: float = 0.66666,
+    ) -> torch.Tensor:
+        g = self.emb_g(sid).unsqueeze(-1)
+        m_p, logs_p, x_mask = self.enc_p(phone, pitch, phone_lengths)
+        z_p = (m_p + torch.exp(logs_p) * torch.randn_like(m_p) * noise_scale) * x_mask
+        z = self.flow(z_p, x_mask, g=g, reverse=True)
+        if self.use_f0:
+            if pitchf is None:
+                raise ValueError("pitchf is required for f0 inference")
+            return self.dec(z * x_mask, pitchf, g=g)
+        return self.dec(z * x_mask, g=g)
+
 
 class SynthesizerTrnMs256NSFsid(_Synthesizer):
     def __init__(self, *args, **kwargs):

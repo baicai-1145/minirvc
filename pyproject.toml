@@ -16,6 +16,7 @@ minirvc-extract-f0 = "minirvc.f0.extract_f0:main"
 minirvc-extract-hubert = "minirvc.content.extract_hubert:main"
 minirvc-build-filelist = "minirvc.train.filelist:main"
 minirvc-train = "minirvc.train.train:main"
+minirvc-infer = "minirvc.infer.infer:main"
 
 [build-system]
 requires = ["hatchling"]
