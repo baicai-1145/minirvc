@@ -16,6 +16,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model", type=Path, required=True)
     parser.add_argument("--hubert", type=Path, default=Path("assets/hubert/hubert_base.pt"))
     parser.add_argument("--rmvpe", type=Path, default=Path("assets/rmvpe/rmvpe.pt"))
+    parser.add_argument("--index", type=Path, default=None)
+    parser.add_argument("--index-rate", type=float, default=0.0)
+    parser.add_argument("--index-top-k", type=int, default=8)
+    parser.add_argument("--index-query-chunk-size", type=int, default=1024)
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--sid", type=int, default=0)
     parser.add_argument("--f0-up-key", type=float, default=0.0)
@@ -34,6 +38,10 @@ def main(argv: Iterable[str] | None = None) -> None:
         voice_path=args.model,
         hubert_path=args.hubert,
         rmvpe_path=args.rmvpe,
+        index_path=args.index,
+        index_rate=args.index_rate,
+        index_top_k=args.index_top_k,
+        index_query_chunk_size=args.index_query_chunk_size,
         device=device,
         half=not args.no_half,
     )

@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from minirvc.content.hubert import load_hubert
 from minirvc.f0.extract_f0 import F0Coarse
 from minirvc.f0.rmvpe import RMVPE
+from minirvc.index.search import FeatureIndex
 from minirvc.infer.checkpoint import LoadedVoice, load_voice_model
 from minirvc.preprocess.audio_io import load_audio, write_wav
 
@@ -19,6 +20,10 @@ class RvcInferencer:
         voice_path: str | Path,
         hubert_path: str | Path,
         rmvpe_path: str | Path | None = None,
+        index_path: str | Path | None = None,
+        index_rate: float = 0.0,
+        index_top_k: int = 8,
+        index_query_chunk_size: int = 1024,
         device: str | torch.device | None = None,
         half: bool = True,
     ):
@@ -31,6 +36,18 @@ class RvcInferencer:
             raise ValueError("rmvpe_path is required for f0 voice models")
         self.rmvpe = RMVPE(rmvpe_path, device=self.device) if self.voice.use_f0 else None
         self.coarse = F0Coarse()
+        self.index_rate = float(index_rate)
+        self.index_top_k = int(index_top_k)
+        self.index_query_chunk_size = int(index_query_chunk_size)
+        if not 0.0 <= self.index_rate <= 1.0:
+            raise ValueError("index_rate must be between 0 and 1")
+        if self.index_top_k <= 0:
+            raise ValueError("index_top_k must be positive")
+        if self.index_query_chunk_size <= 0:
+            raise ValueError("index_query_chunk_size must be positive")
+        if self.index_rate > 0 and index_path is None:
+            raise ValueError("index_path is required when index_rate > 0")
+        self.index = FeatureIndex(index_path, self.device, dtype=torch.float32) if self.index_rate > 0 else None
 
     def infer_file(
         self,
@@ -88,6 +105,8 @@ class RvcInferencer:
     def _content_features(self, audio_16k: np.ndarray) -> torch.Tensor:
         source = torch.from_numpy(audio_16k).float().view(1, -1).to(self.device)
         features = self.hubert.infer(source, version=self.voice.version)
+        if self.index is not None:
+            features = self.index.blend(features, self.index_rate, self.index_top_k, self.index_query_chunk_size)
         return F.interpolate(features.transpose(1, 2), scale_factor=2, mode="nearest").transpose(1, 2)
 
     def _f0(self, audio_16k: np.ndarray, f0_up_key: float, threshold: float) -> np.ndarray:
