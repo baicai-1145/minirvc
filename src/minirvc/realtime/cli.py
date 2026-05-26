@@ -8,7 +8,7 @@ import time
 import numpy as np
 
 from minirvc.preprocess.audio_io import load_audio, write_wav
-from minirvc.realtime.engine import RealtimeConfig, RealtimeEngine
+from minirvc.realtime.engine import RealtimeConfig, create_realtime_engine
 from minirvc.realtime.stream import list_devices, run_stream
 
 
@@ -21,7 +21,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--index-rate", type=float, default=0.0)
     parser.add_argument("--index-top-k", type=int, default=8)
     parser.add_argument("--index-query-chunk-size", type=int, default=1024)
+    parser.add_argument("--backend", choices=("torch", "mlx"), default="torch")
     parser.add_argument("--device", type=str, default=None)
+    parser.add_argument("--precision", choices=("fp32", "bf16", "fp16"), default="bf16")
     parser.add_argument("--sid", type=int, default=0)
     parser.add_argument("--f0-up-key", type=float, default=0.0)
     parser.add_argument("--f0-threshold", type=float, default=0.03)
@@ -56,8 +58,10 @@ def main(argv: Iterable[str] | None = None) -> None:
         index_rate=args.index_rate,
         index_top_k=args.index_top_k,
         index_query_chunk_size=args.index_query_chunk_size,
+        backend=args.backend,
         device=args.device,
         half=not args.no_half,
+        precision=args.precision,
         sid=args.sid,
         f0_up_key=args.f0_up_key,
         f0_threshold=args.f0_threshold,
@@ -67,7 +71,7 @@ def main(argv: Iterable[str] | None = None) -> None:
         extra_time=args.extra_time,
         sola_search_time=args.sola_search_time,
     )
-    engine = RealtimeEngine(config)
+    engine = create_realtime_engine(config)
     if args.offline_input is not None:
         if args.offline_output is None:
             raise SystemExit("--offline-output is required with --offline-input")
@@ -82,7 +86,7 @@ def main(argv: Iterable[str] | None = None) -> None:
     )
 
 
-def _run_offline(engine: RealtimeEngine, input_path: Path, output_path: Path) -> None:
+def _run_offline(engine, input_path: Path, output_path: Path) -> None:
     audio = load_audio(input_path, engine.sample_rate, highpass_hz=0.0)
     original_length = audio.shape[0]
     pad = (-audio.shape[0]) % engine.block_frame

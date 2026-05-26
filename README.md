@@ -244,6 +244,12 @@ uv run minirvc-realtime --list-devices
 uv run minirvc-realtime --model logs/test/test.pth --device cuda:0 --input-device 0 --output-device 1
 ```
 
+Apple Silicon 上可使用 MLX 后端：
+
+```bash
+uv run minirvc-realtime --model logs/test/test.mlx.npz --backend mlx --device gpu --precision bf16 --input-device 0 --output-device 1
+```
+
 离线模拟实时 block 处理：
 
 ```bash
@@ -258,6 +264,8 @@ uv run minirvc-realtime --model logs/test/test.pth --offline-input input.wav --o
 --extra-time          HuBERT/F0 上下文时长，默认 2.5
 --f0-up-key           半音升降调，默认 0
 --index-rate          检索混合比例，默认 0
+--backend             torch 或 mlx，默认 torch
+--precision           MLX 实时推理精度：fp32、bf16、fp16，默认 bf16
 ```
 
 ## ckpt 工具
