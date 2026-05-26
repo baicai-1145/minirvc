@@ -4,10 +4,6 @@ import argparse
 from collections.abc import Iterable
 from pathlib import Path
 
-import torch
-
-from minirvc.infer.pipeline import RvcInferencer
-
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
@@ -21,6 +17,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--index-top-k", type=int, default=8)
     parser.add_argument("--index-query-chunk-size", type=int, default=1024)
     parser.add_argument("--device", type=str, default=None)
+    parser.add_argument("--backend", choices=("torch", "mlx"), default="torch")
+    parser.add_argument("--precision", choices=("fp32", "bf16", "fp16"), default="fp32")
     parser.add_argument("--sid", type=int, default=0)
     parser.add_argument("--f0-up-key", type=float, default=0.0)
     parser.add_argument("--f0-threshold", type=float, default=0.03)
@@ -38,18 +36,39 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Iterable[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
-    device = args.device or ("cuda:0" if torch.cuda.is_available() else "cpu")
-    inferencer = RvcInferencer(
-        voice_path=args.model,
-        hubert_path=args.hubert,
-        rmvpe_path=args.rmvpe,
-        index_path=args.index,
-        index_rate=args.index_rate,
-        index_top_k=args.index_top_k,
-        index_query_chunk_size=args.index_query_chunk_size,
-        device=device,
-        half=not args.no_half,
-    )
+    if args.backend == "mlx":
+        from minirvc.mlx.infer import MlxRvcInferencer
+
+        inferencer = MlxRvcInferencer(
+            voice_path=args.model,
+            hubert_path=args.hubert,
+            rmvpe_path=args.rmvpe,
+            index_path=args.index,
+            index_rate=args.index_rate,
+            index_top_k=args.index_top_k,
+            index_query_chunk_size=args.index_query_chunk_size,
+            device=args.device,
+            precision=args.precision,
+        )
+    else:
+        if args.precision != "fp32":
+            raise ValueError("--precision is only supported with --backend mlx")
+        import torch
+
+        from minirvc.infer.pipeline import RvcInferencer
+
+        device = args.device or ("cuda:0" if torch.cuda.is_available() else "cpu")
+        inferencer = RvcInferencer(
+            voice_path=args.model,
+            hubert_path=args.hubert,
+            rmvpe_path=args.rmvpe,
+            index_path=args.index,
+            index_rate=args.index_rate,
+            index_top_k=args.index_top_k,
+            index_query_chunk_size=args.index_query_chunk_size,
+            device=device,
+            half=not args.no_half,
+        )
     paths = (
         sorted(path for path in args.input.iterdir() if path.suffix.lower() == ".wav")
         if args.input.is_dir()

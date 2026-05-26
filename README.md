@@ -184,7 +184,7 @@ v1：
 uv run minirvc-build-index logs/test --version v1 --output logs/test/feature_v1.npz
 ```
 
-索引文件是 `.npz`，内部保存 feature matrix。推理时使用 torch exact top-k，不需要 FAISS。
+索引文件是 `.npz`，内部保存 feature matrix。Torch 推理使用 torch exact top-k，MLX 推理使用 MLX exact top-k，不需要 FAISS。
 
 ## 推理
 
@@ -192,6 +192,12 @@ uv run minirvc-build-index logs/test --version v1 --output logs/test/feature_v1.
 
 ```bash
 uv run minirvc-infer input.wav output.wav --model logs/test/test.pth
+```
+
+Apple Silicon 上可使用 MLX 后端加载 `.mlx.npz`：
+
+```bash
+uv run minirvc-infer input.wav output.wav --model logs/test/test.mlx.npz --backend mlx --device gpu --precision bf16
 ```
 
 目录批量推理：
@@ -219,6 +225,8 @@ uv run minirvc-infer input.wav output.wav --model logs/test/test.pth --index log
 --split-center-seconds 推理切点间隔秒数，默认按设备精度沿用原版
 --split-max-seconds   超过该长度启用推理分段，默认按设备精度沿用原版
 --device              例如 cuda:0 或 cpu
+--backend             torch 或 mlx，默认 torch
+--precision           MLX 推理精度：fp32、bf16、fp16，默认 fp32
 --no-half             禁用半精度推理
 ```
 

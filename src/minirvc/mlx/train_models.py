@@ -533,12 +533,14 @@ class _Synthesizer(nn.Module):
         self.flow = ResidualCouplingBlock(inter_channels, values["hidden_channels"], 5, 1, 3, gin_channels=values["gin_channels"])
         self.emb_g = nn.Embedding(values["spk_embed_dim"], values["gin_channels"])
 
-    def _posterior(self, phone, phone_lengths, y, y_lengths, ds, pitch=None):
+    def _speaker_condition(self, ds):
         g = self.emb_g(ds)
         if g.ndim == 2:
-            g = g[:, :, None]
-        else:
-            g = g.swapaxes(1, 2)
+            return g[:, :, None]
+        return g.swapaxes(1, 2)
+
+    def _posterior(self, phone, phone_lengths, y, y_lengths, ds, pitch=None):
+        g = self._speaker_condition(ds)
         m_p, logs_p, x_mask = self.enc_p(phone, pitch, phone_lengths)
         z, m_q, logs_q, y_mask = self.enc_q(y, y_lengths, g=g)
         z_p = self.flow(z, y_mask, g=g)
@@ -556,6 +558,30 @@ class _Synthesizer(nn.Module):
             g, z_slice, ids_slice, x_mask, y_mask, stats = self._posterior(phone, phone_lengths, y, y_lengths, ds)
             y_hat = self.dec(z_slice, g=g)
         return y_hat, ids_slice, x_mask, y_mask, stats
+
+    def infer(self, phone, phone_lengths, sid, pitch=None, pitchf=None, noise_scale: float = 0.66666, skip_head=None, return_length=None, return_length2=None):
+        g = self._speaker_condition(sid)
+        if skip_head is not None and return_length is not None:
+            head = _scalar_int(skip_head)
+            length = _scalar_int(return_length)
+            flow_head = max(head - 24, 0)
+            dec_head = head - flow_head
+            m_p, logs_p, x_mask = self.enc_p(phone, pitch, phone_lengths, flow_head)
+        else:
+            head = length = dec_head = None
+            m_p, logs_p, x_mask = self.enc_p(phone, pitch, phone_lengths)
+        z_p = (m_p + mx.exp(logs_p) * mx.random.normal(m_p.shape) * float(noise_scale)) * x_mask
+        z = self.flow(z_p, x_mask, g=g, reverse=True)
+        if length is not None:
+            z = z[:, :, dec_head : dec_head + length]
+            x_mask = x_mask[:, :, dec_head : dec_head + length]
+        if self.use_f0:
+            if pitchf is None:
+                raise ValueError("pitchf is required for f0 inference")
+            if length is not None:
+                pitchf = pitchf[:, head : head + length]
+            return self.dec(z * x_mask, pitchf, g=g, n_res=return_length2)
+        return self.dec(z * x_mask, g=g, n_res=return_length2)
 
 
 class SynthesizerTrnMs256NSFsid(_Synthesizer):
