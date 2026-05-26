@@ -51,13 +51,19 @@ class TextEncoder(nn.Module):
         phone: torch.Tensor,
         pitch: torch.Tensor | None,
         lengths: torch.Tensor,
+        skip_head: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         x = self.emb_phone(phone)
         if pitch is not None:
             x = x + self.emb_pitch(pitch)
         x = self.lrelu(x * math.sqrt(self.hidden_channels)).transpose(1, -1)
         x_mask = commons.sequence_mask(lengths, x.size(2)).unsqueeze(1).to(x.dtype)
-        stats = self.proj(self.encoder(x * x_mask, x_mask)) * x_mask
+        x = self.encoder(x * x_mask, x_mask)
+        if skip_head is not None:
+            head = int(skip_head.item())
+            x = x[:, :, head:]
+            x_mask = x_mask[:, :, head:]
+        stats = self.proj(x) * x_mask
         return torch.split(stats, self.out_channels, dim=1) + (x_mask,)
 
 
@@ -166,7 +172,16 @@ class Generator(nn.Module):
         if gin_channels:
             self.cond = nn.Conv1d(gin_channels, upsample_initial_channel, 1)
 
-    def forward(self, x: torch.Tensor, g: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(
+        self,
+        x: torch.Tensor,
+        g: Optional[torch.Tensor] = None,
+        n_res: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        if n_res is not None:
+            n = int(n_res.item())
+            if n != x.shape[-1]:
+                x = F.interpolate(x, size=n, mode="linear")
         x = self.conv_pre(x)
         if g is not None:
             x = x + self.cond(g)
@@ -271,8 +286,20 @@ class GeneratorNSF(Generator):
         self.noise_convs = _noise_convs(upsample_rates, upsample_initial_channel)
         self.upp = math.prod(upsample_rates)
 
-    def forward(self, x: torch.Tensor, f0: torch.Tensor, g: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(
+        self,
+        x: torch.Tensor,
+        f0: torch.Tensor,
+        g: Optional[torch.Tensor] = None,
+        n_res: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         har_source = self.m_source(f0, self.upp).transpose(1, 2)
+        if n_res is not None:
+            n = int(n_res.item())
+            if n * self.upp != har_source.shape[-1]:
+                har_source = F.interpolate(har_source, size=n * self.upp, mode="linear")
+            if n != x.shape[-1]:
+                x = F.interpolate(x, size=n, mode="linear")
         x = self.conv_pre(x)
         if g is not None:
             x = x + self.cond(g)
@@ -369,7 +396,14 @@ class _Synthesizer(nn.Module):
             16,
             gin_channels=values["gin_channels"],
         )
-        self.flow = ResidualCouplingBlock(inter_channels, values["hidden_channels"], 5, 1, 3, gin_channels=values["gin_channels"])
+        self.flow = ResidualCouplingBlock(
+            inter_channels,
+            values["hidden_channels"],
+            5,
+            1,
+            3,
+            gin_channels=values["gin_channels"],
+        )
         self.emb_g = nn.Embedding(values["spk_embed_dim"], values["gin_channels"])
 
     def _posterior(self, phone, phone_lengths, y, y_lengths, ds, pitch=None):
@@ -383,7 +417,9 @@ class _Synthesizer(nn.Module):
     def forward(self, phone, phone_lengths, *args):
         if self.use_f0:
             pitch, pitchf, y, y_lengths, ds = args
-            g, z_slice, ids_slice, x_mask, y_mask, stats = self._posterior(phone, phone_lengths, y, y_lengths, ds, pitch)
+            g, z_slice, ids_slice, x_mask, y_mask, stats = self._posterior(
+                phone, phone_lengths, y, y_lengths, ds, pitch
+            )
             pitchf = commons.slice_segments2(pitchf, ids_slice, self.segment_size)
             y_hat = self.dec(z_slice, pitchf, g=g)
         else:
@@ -400,16 +436,32 @@ class _Synthesizer(nn.Module):
         pitch: torch.Tensor | None = None,
         pitchf: torch.Tensor | None = None,
         noise_scale: float = 0.66666,
+        skip_head: torch.Tensor | None = None,
+        return_length: torch.Tensor | None = None,
+        return_length2: torch.Tensor | None = None,
     ) -> torch.Tensor:
         g = self.emb_g(sid).unsqueeze(-1)
-        m_p, logs_p, x_mask = self.enc_p(phone, pitch, phone_lengths)
+        if skip_head is not None and return_length is not None:
+            head = int(skip_head.item())
+            length = int(return_length.item())
+            flow_head = torch.clamp(skip_head - 24, min=0)
+            dec_head = head - int(flow_head.item())
+            m_p, logs_p, x_mask = self.enc_p(phone, pitch, phone_lengths, flow_head)
+        else:
+            head = length = dec_head = None
+            m_p, logs_p, x_mask = self.enc_p(phone, pitch, phone_lengths)
         z_p = (m_p + torch.exp(logs_p) * torch.randn_like(m_p) * noise_scale) * x_mask
         z = self.flow(z_p, x_mask, g=g, reverse=True)
+        if length is not None:
+            z = z[:, :, dec_head : dec_head + length]
+            x_mask = x_mask[:, :, dec_head : dec_head + length]
         if self.use_f0:
             if pitchf is None:
                 raise ValueError("pitchf is required for f0 inference")
-            return self.dec(z * x_mask, pitchf, g=g)
-        return self.dec(z * x_mask, g=g)
+            if length is not None:
+                pitchf = pitchf[:, head : head + length]
+            return self.dec(z * x_mask, pitchf, g=g, n_res=return_length2)
+        return self.dec(z * x_mask, g=g, n_res=return_length2)
 
 
 class SynthesizerTrnMs256NSFsid(_Synthesizer):
@@ -445,7 +497,11 @@ def _synth_kwargs(args, kwargs) -> dict:
 
 def _text_encoder(phone_channels: int, values: dict, use_f0: bool) -> TextEncoder:
     return TextEncoder(
-        phone_channels, values["inter_channels"], values["hidden_channels"], values["filter_channels"], values["n_heads"],
+        phone_channels,
+        values["inter_channels"],
+        values["hidden_channels"],
+        values["filter_channels"],
+        values["n_heads"],
         values["n_layers"], values["kernel_size"], float(values["p_dropout"]), f0=use_f0,
     )
 
@@ -469,7 +525,10 @@ class MultiPeriodDiscriminatorV2(nn.Module):
 
 
 def _period_discriminators(periods: list[int], use_spectral_norm: bool) -> nn.ModuleList:
-    return nn.ModuleList([DiscriminatorS(use_spectral_norm)] + [DiscriminatorP(period, use_spectral_norm=use_spectral_norm) for period in periods])
+    return nn.ModuleList(
+        [DiscriminatorS(use_spectral_norm)]
+        + [DiscriminatorP(period, use_spectral_norm=use_spectral_norm) for period in periods]
+    )
 
 
 def _run_discriminators(discriminators: nn.ModuleList, y: torch.Tensor, y_hat: torch.Tensor):

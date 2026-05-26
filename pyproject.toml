@@ -7,6 +7,7 @@ requires-python = ">=3.10,<3.11"
 dependencies = [
     "av>=14.0.0",
     "numpy>=1.24.0",
+    "sounddevice>=0.4.6",
     "torch>=2.4.0",
 ]
 
@@ -17,6 +18,7 @@ minirvc-extract-hubert = "minirvc.content.extract_hubert:main"
 minirvc-build-filelist = "minirvc.train.filelist:main"
 minirvc-train = "minirvc.train.train:main"
 minirvc-infer = "minirvc.infer.infer:main"
+minirvc-realtime = "minirvc.realtime.cli:main"
 minirvc-build-index = "minirvc.index.build_index:main"
 minirvc-merge-models = "minirvc.ckpt.merge:main"
 minirvc-model-info = "minirvc.ckpt.info:main"

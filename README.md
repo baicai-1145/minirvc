@@ -24,6 +24,7 @@ uv run <command>
 ```text
 av
 numpy
+sounddevice
 torch
 ```
 
@@ -199,6 +200,36 @@ uv run minirvc-infer input.wav output.wav --model logs/test/test.pth --index log
 --no-half             禁用半精度推理
 ```
 
+## 实时推理
+
+列出音频设备：
+
+```bash
+uv run minirvc-realtime --list-devices
+```
+
+启动实时变声：
+
+```bash
+uv run minirvc-realtime --model logs/test/test.pth --device cuda:0 --input-device 0 --output-device 1
+```
+
+离线模拟实时 block 处理：
+
+```bash
+uv run minirvc-realtime --model logs/test/test.pth --offline-input input.wav --offline-output realtime.wav
+```
+
+常用实时参数：
+
+```text
+--block-time          每次转换的音频块时长，默认 0.25
+--crossfade-time      SOLA/crossfade 时长，默认 0.05
+--extra-time          HuBERT/F0 上下文时长，默认 2.5
+--f0-up-key           半音升降调，默认 0
+--index-rate          检索混合比例，默认 0
+```
+
 ## ckpt 工具
 
 查看模型信息：
@@ -225,6 +256,7 @@ minirvc-build-filelist
 minirvc-train
 minirvc-build-index
 minirvc-infer
+minirvc-realtime
 minirvc-model-info
 minirvc-merge-models
 ```
