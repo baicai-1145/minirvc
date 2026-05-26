@@ -10,6 +10,9 @@ from minirvc.preprocess.audio_normalize import normalize_clip
 from minirvc.preprocess.audio_slice import iter_legacy_fixed_length, split_by_silence
 
 
+_AUDIO_EXTENSIONS = {".aac", ".flac", ".m4a", ".mp3", ".ogg", ".opus", ".wav"}
+
+
 def preprocess_directory(
     input_dir: str | Path,
     output_dir: str | Path,
@@ -28,7 +31,7 @@ def preprocess_directory(
     tasks = [
         (path, index, gt_dir, wav16k_dir, sample_rate, seconds, highpass_hz)
         for index, path in enumerate(sorted(input_dir.iterdir()))
-        if path.is_file()
+        if path.is_file() and path.suffix.lower() in _AUDIO_EXTENSIONS
     ]
 
     if workers <= 1:

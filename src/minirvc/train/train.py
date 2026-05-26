@@ -4,10 +4,6 @@ import argparse
 from collections.abc import Iterable
 from pathlib import Path
 
-import torch
-
-from minirvc.train.trainer import train
-
 
 def infer_pretrained_paths(version: str, sample_rate: str, use_f0: bool) -> tuple[Path, Path]:
     root = Path("assets/pretrained_v2" if version == "v2" else "assets/pretrained")
@@ -28,6 +24,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--pretrain-g", type=Path, default=None)
     parser.add_argument("--pretrain-d", type=Path, default=None)
     parser.add_argument("--device", type=str, default=None)
+    parser.add_argument("--backend", choices=("torch", "mlx"), default="torch")
+    parser.add_argument("--precision", choices=("fp32", "bf16", "fp16"), default="fp32")
     parser.add_argument("--config-json", type=Path, default=None)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--no-resume", action="store_true")
@@ -44,26 +42,39 @@ def main(argv: Iterable[str] | None = None) -> None:
     if args.pretrain_d is not None:
         pretrain_d = args.pretrain_d
 
-    if args.device is None and torch.cuda.is_available():
-        args.device = "cuda:0"
+    train_kwargs = {
+        "exp_dir": args.exp_dir,
+        "filelist": filelist,
+        "version": args.version,
+        "sample_rate": args.sample_rate,
+        "use_f0": args.f0,
+        "batch_size": args.batch_size,
+        "epochs": args.epochs,
+        "save_every_epoch": args.save_every_epoch,
+        "pretrain_g": pretrain_g,
+        "pretrain_d": pretrain_d,
+        "device": args.device,
+        "config_json": args.config_json,
+        "num_workers": args.workers,
+        "resume": not args.no_resume,
+        "export_final": not args.no_export_final,
+    }
 
-    train(
-        exp_dir=args.exp_dir,
-        filelist=filelist,
-        version=args.version,
-        sample_rate=args.sample_rate,
-        use_f0=args.f0,
-        batch_size=args.batch_size,
-        epochs=args.epochs,
-        save_every_epoch=args.save_every_epoch,
-        pretrain_g=pretrain_g,
-        pretrain_d=pretrain_d,
-        device=args.device,
-        config_json=args.config_json,
-        num_workers=args.workers,
-        resume=not args.no_resume,
-        export_final=not args.no_export_final,
-    )
+    if args.backend == "mlx":
+        from minirvc.mlx.train import train
+
+        train_kwargs["precision"] = args.precision
+    else:
+        if args.precision != "fp32":
+            raise ValueError("--precision is only supported with --backend mlx")
+        import torch
+
+        from minirvc.train.trainer import train
+
+        if args.device is None and torch.cuda.is_available():
+            train_kwargs["device"] = "cuda:0"
+
+    train(**train_kwargs)
 
 
 if __name__ == "__main__":

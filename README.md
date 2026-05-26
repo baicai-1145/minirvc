@@ -136,6 +136,14 @@ v2 40k f0：
 uv run minirvc-train logs/test --version v2 --sample-rate 40k --f0 --batch-size 20 --epochs 20 --save-every-epoch 20
 ```
 
+Apple Silicon 上可使用 MLX 后端：
+
+```bash
+uv run minirvc-train logs/test --version v2 --sample-rate 40k --f0 --batch-size 4 --epochs 20 --save-every-epoch 20 --backend mlx --device gpu --precision bf16
+```
+
+MLX 训练默认使用 `fp32`；`--precision bf16` 会把模型和训练输入切到 BF16，mel/loss 关键计算仍保持 fp32。
+
 v2 40k nof0：
 
 ```bash
@@ -159,6 +167,7 @@ uv run minirvc-train logs/test --version v2 --sample-rate 40k --f0 --batch-size 
 
 ```text
 logs/test/test.pth
+logs/test/test.mlx.npz  # MLX 后端
 ```
 
 ## 构建检索索引
