@@ -26,6 +26,7 @@ av
 numpy
 sounddevice
 torch
+mlx（仅 Apple Silicon 上安装，用于 MLX 后端）
 ```
 
 ## 下载和放置模型
@@ -59,6 +60,12 @@ f0 模型需要这一步；nof0 模型可以跳过。
 uv run minirvc-extract-f0 logs/test --model assets/rmvpe/rmvpe.pt --workers 1 --device cuda:0 --batch-size 8
 ```
 
+Apple Silicon 上可使用 MLX 后端：
+
+```bash
+uv run minirvc-extract-f0 logs/test --model assets/rmvpe/rmvpe.pt --backend mlx --device gpu --workers 1 --batch-size 8
+```
+
 输出：
 
 ```text
@@ -72,6 +79,12 @@ v2：
 
 ```bash
 uv run minirvc-extract-hubert logs/test --model assets/hubert/hubert_base.pt --version v2 --device cuda:0 --batch-size 16
+```
+
+Apple Silicon 上可使用 MLX 后端：
+
+```bash
+uv run minirvc-extract-hubert logs/test --model assets/hubert/hubert_base.pt --version v2 --backend mlx --device gpu --batch-size 16
 ```
 
 v1：

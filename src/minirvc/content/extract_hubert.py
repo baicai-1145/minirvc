@@ -3,11 +3,10 @@ from __future__ import annotations
 import argparse
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
 
 import numpy as np
-import torch
 
-from minirvc.content.hubert import load_hubert
 from minirvc.preprocess.audio_io import load_audio_unfiltered
 
 
@@ -17,7 +16,20 @@ def extract_hubert_directory(
     version: str,
     device: str | None,
     batch_size: int = 16,
+    backend: str = "torch",
 ) -> None:
+    if backend == "mlx":
+        from minirvc.mlx.hubert import extract_hubert_directory_mlx
+
+        extract_hubert_directory_mlx(exp_dir, model_path, version, device, batch_size)
+        return
+    if backend != "torch":
+        raise ValueError("backend must be 'torch' or 'mlx'")
+
+    import torch
+
+    from minirvc.content.hubert import load_hubert
+
     exp_dir = Path(exp_dir)
     wav_dir = exp_dir / "1_16k_wavs"
     out_dir = exp_dir / ("3_feature256" if version == "v1" else "3_feature768")
@@ -45,11 +57,13 @@ def extract_hubert_directory(
 
 def _extract_hubert_batch(
     group: list[tuple[Path, np.ndarray]],
-    model: torch.nn.Module,
+    model: Any,
     version: str,
     out_dir: Path,
-    device: torch.device,
+    device: Any,
 ) -> None:
+    import torch
+
     sample_lengths = [audio.shape[0] for _, audio in group]
     max_samples = max(sample_lengths)
     audio_batch = torch.zeros((len(group), max_samples), dtype=torch.float32, device=device)
@@ -80,12 +94,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", choices=("v1", "v2"), default="v2")
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--backend", choices=("torch", "mlx"), default="torch")
     return parser
 
 
 def main(argv: Iterable[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
-    extract_hubert_directory(args.exp_dir, args.model, args.version, args.device, args.batch_size)
+    extract_hubert_directory(args.exp_dir, args.model, args.version, args.device, args.batch_size, args.backend)
 
 
 if __name__ == "__main__":

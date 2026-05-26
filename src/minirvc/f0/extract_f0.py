@@ -4,11 +4,10 @@ import argparse
 import multiprocessing
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
 
 import numpy as np
-import torch
 
-from minirvc.f0.rmvpe import RMVPE
 from minirvc.preprocess.audio_io import load_audio_unfiltered
 
 
@@ -38,7 +37,16 @@ def extract_f0_directory(
     workers: int,
     device: str | None,
     batch_size: int = 8,
+    backend: str = "torch",
 ) -> None:
+    if backend == "mlx":
+        from minirvc.mlx.rmvpe import extract_f0_directory_mlx
+
+        extract_f0_directory_mlx(exp_dir, model_path, workers, device, batch_size)
+        return
+    if backend != "torch":
+        raise ValueError("backend must be 'torch' or 'mlx'")
+
     exp_dir = Path(exp_dir)
     wav_dir = exp_dir / "1_16k_wavs"
     coarse_dir = exp_dir / "2a_f0"
@@ -61,6 +69,8 @@ def extract_f0_directory(
 
 
 def _extract_part(task: tuple[list[Path], Path, Path, str | None, int]) -> None:
+    from minirvc.f0.rmvpe import RMVPE
+
     files, exp_dir, model_path, device, batch_size = task
     model = RMVPE(model_path, device=device)
     coarse = F0Coarse()
@@ -78,10 +88,12 @@ def _extract_part(task: tuple[list[Path], Path, Path, str | None, int]) -> None:
 
 def _extract_f0_batch(
     group: list[tuple[Path, np.ndarray]],
-    model: RMVPE,
+    model: Any,
     coarse: F0Coarse,
     exp_dir: Path,
 ) -> None:
+    import torch
+
     with torch.inference_mode():
         mels = []
         frame_lengths = []
@@ -129,12 +141,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--backend", choices=("torch", "mlx"), default="torch")
     return parser
 
 
 def main(argv: Iterable[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
-    extract_f0_directory(args.exp_dir, args.model, args.workers, args.device, args.batch_size)
+    extract_f0_directory(args.exp_dir, args.model, args.workers, args.device, args.batch_size, args.backend)
 
 
 if __name__ == "__main__":

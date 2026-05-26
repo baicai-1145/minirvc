@@ -9,6 +9,7 @@ dependencies = [
     "numpy>=1.24.0",
     "sounddevice>=0.4.6",
     "torch>=2.4.0",
+    "mlx>=0.31.0; platform_system == 'Darwin' and platform_machine == 'arm64'",
 ]
 
 [project.scripts]
